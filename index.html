@@ -875,11 +875,13 @@ function renderEvents(){
         const remDate=toISO(addDays(fromISO(occDate),-r.days));
         const di=advDates.findIndex(d=>toISO(d)===remDate);
         if(di<0)return;
+        // Expire: don't show if reminder day has already passed (before today)
+        if(remDate<toISO(new Date()))return;
         const col=advCols[di];if(!col)return;
         const block=document.createElement('div');
         block.className='ev-block';
         const top=Math.max(0,330-270); // 5:30 = 330min, offset 270
-        block.style.cssText=`top:${top}px;height:28px;background:#FFF9C4;border-left:3px solid #F59E0B;color:#92400E;font-size:10px;font-weight:600;cursor:pointer;z-index:5;display:flex;align-items:center;padding:0 6px;gap:4px`;
+        block.style.cssText=`top:${top}px;height:28px;background:#FFF9C4;border:2px solid #DC2626;border-radius:6px;color:#92400E;font-size:10px;font-weight:600;cursor:pointer;z-index:5;display:flex;align-items:center;padding:0 6px;gap:4px;box-shadow:0 0 0 1px #FCA5A5`;
         block.innerHTML=`<span>⏰ ${r.action}: ${ev.title}</span>`;
         block.title=`${r.action} for "${ev.title}" (${occDate})`;
         block.addEventListener('click',()=>{
