@@ -350,10 +350,12 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
       <button class="btn-secondary" id="ev-cancel">Cancel</button>
       <button class="btn-primary" id="ev-save">Save</button>
     </div>
-    <!-- Copy to day picker popup -->
-    <div id="copy-day-popup" style="display:none;position:absolute;bottom:60px;left:0;right:0;background:var(--bg);border:1px solid var(--border-md);border-radius:12px;padding:12px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.15)">
-      <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px">Copy to which day?</div>
-      <div id="copy-day-btns" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+    <!-- Copy to day inline picker -->
+    <div id="copy-day-panel" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:10px">
+      <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:8px">Copy to which day(s)?</div>
+      <div id="copy-day-checks" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <button type="button" class="btn-primary" id="copy-day-confirm" style="font-size:12px;padding:6px 16px">Copy</button>
+      <button type="button" class="btn-secondary" id="copy-day-cancel-btn" style="font-size:12px;padding:6px 12px;margin-left:6px">Cancel</button>
     </div>
   </div>
 </div>
@@ -1548,31 +1550,41 @@ document.getElementById('ev-delete').addEventListener('click',()=>{
     save();closeEvModal();renderEvents();
   }
 });
-document.getElementById('ev-copy-day').addEventListener('click',()=>{
-  if(!evEditId)return;
-  const popup=document.getElementById('copy-day-popup');
-  popup.style.display=popup.style.display==='none'?'block':'none';
-  if(popup.style.display==='block'){
-    const btns=document.getElementById('copy-day-btns');
-    btns.innerHTML='';
-    const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    days.forEach((d,i)=>{
-      const btn=document.createElement('button');
-      btn.type='button';btn.className='tb-btn';btn.textContent=d;
-      btn.style.cssText='font-size:12px;padding:5px 10px;';
-      btn.addEventListener('click',()=>{
-        const ev=state.events.find(e=>e.id===evEditId);if(!ev)return;
-        const dup={...ev,id:uid(),dayIndex:i};
-        const newDate=toISO(weekDates()[i]);
-        dup.recStartDate=newDate;dup.recUntil=newDate;
-        delete dup.recWeekdays;delete dup.recMasterId;delete dup.recOverrideDate;delete dup.recExceptions;
-        state.events.push(dup);
-        pushDown(dup.id);save();closeEvModal();renderEvents();
-      });
-      btns.appendChild(btn);
+(function(){
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  // Build day checkboxes once
+  const checks=document.getElementById('copy-day-checks');
+  days.forEach((d,i)=>{
+    const lbl=document.createElement('label');
+    lbl.style.cssText='display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px solid var(--border-md);border-radius:8px;';
+    const cb=document.createElement('input');cb.type='checkbox';cb.value=i;cb.style.accentColor='var(--accent)';
+    lbl.appendChild(cb);lbl.appendChild(document.createTextNode(d));
+    checks.appendChild(lbl);
+  });
+  document.getElementById('ev-copy-day').addEventListener('click',()=>{
+    const panel=document.getElementById('copy-day-panel');
+    panel.style.display='block';
+    // Uncheck all
+    checks.querySelectorAll('input').forEach(cb=>cb.checked=false);
+  });
+  document.getElementById('copy-day-cancel-btn').addEventListener('click',()=>{
+    document.getElementById('copy-day-panel').style.display='none';
+  });
+  document.getElementById('copy-day-confirm').addEventListener('click',()=>{
+    const ev=state.events.find(e=>e.id===evEditId);if(!ev)return;
+    const selected=[...checks.querySelectorAll('input:checked')].map(cb=>parseInt(cb.value));
+    if(!selected.length){document.getElementById('copy-day-panel').style.display='none';return;}
+    selected.forEach(i=>{
+      const dup={...ev,id:uid(),dayIndex:i};
+      const newDate=toISO(weekDates()[i]);
+      dup.recStartDate=newDate;dup.recUntil=newDate;
+      delete dup.recWeekdays;delete dup.recMasterId;delete dup.recOverrideDate;delete dup.recExceptions;
+      state.events.push(dup);
+      pushDown(dup.id);
     });
-  }
-});
+    save();closeEvModal();renderEvents();
+  });
+})();
 // All/None reminder buttons
 document.getElementById('rem-select-all').addEventListener('click',()=>{
   document.querySelectorAll('#reminder-grid input').forEach(cb=>{cb.checked=true;});
@@ -1583,7 +1595,7 @@ document.getElementById('rem-clear-all').addEventListener('click',()=>{
   updateReminderLabel();
 });
 document.getElementById('ev-cancel').addEventListener('click',closeEvModal);
-function closeEvModal(){document.getElementById('ev-modal').classList.remove('open');evEditId=evEditDay=null;renderEvents();}
+function closeEvModal(){document.getElementById('ev-modal').classList.remove('open');document.getElementById('copy-day-panel').style.display='none';evEditId=evEditDay=null;renderEvents();}
 
 // ═══════════════════════════════════════════════════════
 // Marker modal
