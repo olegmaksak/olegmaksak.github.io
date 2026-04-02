@@ -155,6 +155,9 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
 .swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:3px solid transparent}
 .swatch:hover{transform:scale(1.15)}
 .swatch.sel{border-color:var(--text)}
+/* Reminder details dropdown */
+#reminder-details summary::-webkit-details-marker{display:none}
+#reminder-details[open] #reminder-toggle-lbl{transform:rotate(180deg)}
 /* Multi reminder checkboxes */
 .preset-btn{font-size:11px;padding:4px 9px;border-radius:10px;border:1px solid var(--border-md);background:none;color:var(--text);cursor:pointer}
 .preset-btn:hover{background:var(--surface);border-color:var(--accent)}
@@ -319,15 +322,38 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
       <div id="ev-weekday-picker" style="display:flex;gap:5px;flex-wrap:wrap"></div>
     </div>
     <div class="form-row">
-      <label class="form-lbl">Reminders (tick all you want)</label>
-      <div class="reminder-grid" id="reminder-grid"></div>
+      <label class="form-lbl">Link (URL)</label>
+      <input class="form-input" type="url" id="ev-url" placeholder="https://..." autocomplete="off">
+    </div>
+    <div class="form-row">
+      <label class="form-lbl">Address / Location</label>
+      <input class="form-input" type="text" id="ev-address" placeholder="e.g. 10 Downing St, London" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <details id="reminder-details">
+        <summary style="cursor:pointer;font-size:11px;font-weight:500;color:var(--text-2);user-select:none;list-style:none;display:flex;align-items:center;gap:6px">
+          <span id="reminder-summary-lbl">Reminders</span>
+          <span style="font-size:10px;color:var(--text-3)" id="reminder-count-lbl"></span>
+          <span style="margin-left:auto;font-size:11px;color:var(--accent)" id="reminder-toggle-lbl">▼</span>
+        </summary>
+        <div class="reminder-grid" id="reminder-grid" style="margin-top:8px"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button type="button" class="btn-secondary" id="rem-select-all" style="font-size:11px;padding:3px 8px">All</button>
+          <button type="button" class="btn-secondary" id="rem-clear-all" style="font-size:11px;padding:3px 8px">None</button>
+        </div>
+      </details>
     </div>
     <div class="modal-actions">
       <button class="btn-danger" id="ev-delete" style="display:none">Delete</button>
-      <button class="btn-secondary" id="ev-duplicate" style="display:none" title="Copy this event to the next day in the week">Copy to next day</button>
+      <button class="btn-secondary" id="ev-copy-day" style="display:none">Copy to day…</button>
       <span class="spacer"></span>
       <button class="btn-secondary" id="ev-cancel">Cancel</button>
       <button class="btn-primary" id="ev-save">Save</button>
+    </div>
+    <!-- Copy to day picker popup -->
+    <div id="copy-day-popup" style="display:none;position:absolute;bottom:60px;left:0;right:0;background:var(--bg);border:1px solid var(--border-md);border-radius:12px;padding:12px;z-index:10;box-shadow:0 4px 16px rgba(0,0,0,.15)">
+      <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:8px">Copy to which day?</div>
+      <div id="copy-day-btns" style="display:flex;gap:5px;flex-wrap:wrap"></div>
     </div>
   </div>
 </div>
@@ -1215,6 +1241,12 @@ function getEndMin(){
   return Math.min(1440,sm+parseInt(sel.value));
 }
 
+function updateReminderLabel(){
+  const sel=getSelectedReminders();
+  const lbl=document.getElementById('reminder-count-lbl');
+  if(lbl) lbl.textContent=sel.length?'('+sel.length+' set)':'';
+}
+
 function buildReminderGrid(selectedMins){
   const grid=document.getElementById('reminder-grid');grid.innerHTML='';
   REMINDER_OPTIONS.forEach(m=>{
@@ -1222,8 +1254,10 @@ function buildReminderGrid(selectedMins){
     const cb=document.createElement('input');cb.type='checkbox';cb.value=m;cb.checked=(selectedMins||[]).includes(m);
     const txt=m<60?m+' min':'1 hr';
     label.appendChild(cb);label.appendChild(document.createTextNode(txt));
+    cb.addEventListener('change',updateReminderLabel);
     grid.appendChild(label);
   });
+  updateReminderLabel();
 }
 function getSelectedReminders(){
   return Array.from(document.querySelectorAll('#reminder-grid input:checked')).map(cb=>parseInt(cb.value));
@@ -1356,11 +1390,13 @@ function openEvModal(id,dayIndex,startM,endM,occDate,prefill){
   if(id){
     const ev=state.events.find(e=>e.id===id);
     document.getElementById('ev-title').value=ev.title;
+    document.getElementById('ev-url').value=ev.url||'';
+    document.getElementById('ev-address').value=ev.address||'';
     document.getElementById('ev-start').value=minToTime(ev.startMin);
     setDurationFromMinutes(ev.startMin,ev.endMin);
     evEditDay=displayDayIndex(ev);
     buildReminderGrid(ev.reminderMins||[]);
-    document.getElementById('ev-duplicate').style.display='';
+    document.getElementById('ev-copy-day').style.display='';
     if(ev.recOverrideDate||!ev.recStartDate||ev.recStartDate===ev.recUntil){
       repeatSel.value='once';untilRow.style.display='none';wdRow.style.display='none';
     } else if(ev.recWeekdays&&ev.recWeekdays.length){
@@ -1374,11 +1410,13 @@ function openEvModal(id,dayIndex,startM,endM,occDate,prefill){
     buildCatSelect('ev-cat-select',ev.categoryId);
   }else{
     document.getElementById('ev-title').value=prefill?.title||'';
+    document.getElementById('ev-url').value='';
+    document.getElementById('ev-address').value='';
     const sm=startM!=null?startM:540,em=endM!=null?endM:600;
     document.getElementById('ev-start').value=minToTime(sm);
     setDurationFromMinutes(sm,em);
     buildReminderGrid(prefill?.reminderMins||[]);
-    document.getElementById('ev-duplicate').style.display='none';
+    document.getElementById('ev-copy-day').style.display='none';
     if(prefill?.recWeekdays?.length){
       repeatSel.value='weekdays';untilRow.style.display='';wdRow.style.display='';
       document.getElementById('ev-until').value=prefill.recUntil||'';
@@ -1463,6 +1501,8 @@ document.getElementById('ev-save').addEventListener('click',()=>{
   const repeatMode=document.getElementById('ev-repeat').value;
   const untilVal=document.getElementById('ev-until').value;
   const reminderMins=getSelectedReminders();
+  const evUrl=document.getElementById('ev-url').value.trim();
+  const evAddress=document.getElementById('ev-address').value.trim();
   let recWeekdays=repeatMode==='weekdays'?getSelectedWeekdays():[];
   if(repeatMode==='weekdays'&&recWeekdays.length===0){alert('Please select at least one weekday.');return;}
   if(endMin<=startMin){alert('End time must be after start time.');return;}
@@ -1471,7 +1511,7 @@ document.getElementById('ev-save').addEventListener('click',()=>{
   if(evEditId){
     const ev=state.events.find(e=>e.id===evEditId);
     if(ev){
-      ev.title=title;ev.startMin=startMin;ev.endMin=endMin;ev.categoryId=catId;ev.reminderMins=reminderMins;
+      ev.title=title;ev.startMin=startMin;ev.endMin=endMin;ev.categoryId=catId;ev.reminderMins=reminderMins;ev.url=evUrl;ev.address=evAddress;
       if(!ev.recOverrideDate){
         if(repeatMode==='once'){const occ=toISO(addDays(fromISO(state.weekStart),evEditDay));ev.recStartDate=occ;ev.recUntil=occ;delete ev.recWeekdays;}
         else if(repeatMode==='weekly'){if(!ev.recStartDate)ev.recStartDate=toISO(addDays(fromISO(state.weekStart),evEditDay));ev.recUntil=untilVal||null;delete ev.recWeekdays;}
@@ -1480,7 +1520,7 @@ document.getElementById('ev-save').addEventListener('click',()=>{
     }
   }else{
     const occDate=toISO(addDays(fromISO(state.weekStart),evEditDay));
-    const newEv={id:uid(),title,dayIndex:evEditDay,startMin,endMin,categoryId:catId,reminderMins};
+    const newEv={id:uid(),title,dayIndex:evEditDay,startMin,endMin,categoryId:catId,reminderMins,url:evUrl,address:evAddress};
     if(repeatMode==='once'){newEv.recStartDate=occDate;newEv.recUntil=occDate;}
     else if(repeatMode==='weekly'){newEv.recStartDate=occDate;newEv.recUntil=untilVal||null;}
     else if(repeatMode==='weekdays'){newEv.recStartDate=occDate;newEv.recWeekdays=recWeekdays;newEv.recUntil=untilVal||null;}
@@ -1508,18 +1548,39 @@ document.getElementById('ev-delete').addEventListener('click',()=>{
     save();closeEvModal();renderEvents();
   }
 });
-document.getElementById('ev-duplicate').addEventListener('click',()=>{
+document.getElementById('ev-copy-day').addEventListener('click',()=>{
   if(!evEditId)return;
-  const ev=state.events.find(e=>e.id===evEditId);if(!ev)return;
-  const nextDay=(ev.dayIndex+1)%7;
-  const dup={...ev,id:uid(),dayIndex:nextDay,recStartDate:undefined,recUntil:undefined,recWeekdays:undefined,recMasterId:undefined,recOverrideDate:undefined,recExceptions:undefined};
-  // For recurring, place as a one-off on next day
-  const nextDate=toISO(addDays(fromISO(state.weekStart),nextDay));
-  dup.recStartDate=nextDate;dup.recUntil=nextDate;
-  Object.keys(dup).forEach(k=>{if(dup[k]===undefined)delete dup[k];});
-  state.events.push(dup);
-  pushDown(dup.id);
-  save();closeEvModal();renderEvents();
+  const popup=document.getElementById('copy-day-popup');
+  popup.style.display=popup.style.display==='none'?'block':'none';
+  if(popup.style.display==='block'){
+    const btns=document.getElementById('copy-day-btns');
+    btns.innerHTML='';
+    const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    days.forEach((d,i)=>{
+      const btn=document.createElement('button');
+      btn.type='button';btn.className='tb-btn';btn.textContent=d;
+      btn.style.cssText='font-size:12px;padding:5px 10px;';
+      btn.addEventListener('click',()=>{
+        const ev=state.events.find(e=>e.id===evEditId);if(!ev)return;
+        const dup={...ev,id:uid(),dayIndex:i};
+        const newDate=toISO(weekDates()[i]);
+        dup.recStartDate=newDate;dup.recUntil=newDate;
+        delete dup.recWeekdays;delete dup.recMasterId;delete dup.recOverrideDate;delete dup.recExceptions;
+        state.events.push(dup);
+        pushDown(dup.id);save();closeEvModal();renderEvents();
+      });
+      btns.appendChild(btn);
+    });
+  }
+});
+// All/None reminder buttons
+document.getElementById('rem-select-all').addEventListener('click',()=>{
+  document.querySelectorAll('#reminder-grid input').forEach(cb=>{cb.checked=true;});
+  updateReminderLabel();
+});
+document.getElementById('rem-clear-all').addEventListener('click',()=>{
+  document.querySelectorAll('#reminder-grid input').forEach(cb=>{cb.checked=false;});
+  updateReminderLabel();
 });
 document.getElementById('ev-cancel').addEventListener('click',closeEvModal);
 function closeEvModal(){document.getElementById('ev-modal').classList.remove('open');evEditId=evEditDay=null;renderEvents();}
