@@ -341,6 +341,24 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
           <button type="button" class="btn-secondary" id="rem-select-all" style="font-size:11px;padding:3px 8px">All</button>
           <button type="button" class="btn-secondary" id="rem-clear-all" style="font-size:11px;padding:3px 8px">None</button>
         </div>
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;font-size:11px;font-weight:500;color:var(--text-2);list-style:none;display:flex;align-items:center;gap:6px">
+            <span>Advance reminders</span><span style="margin-left:auto;font-size:11px;color:var(--accent)">▼</span>
+          </summary>
+          <div style="margin-top:8px">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+              <input type="number" id="adv-rem-days" min="1" max="365" value="7" style="width:60px;padding:5px 8px;border:1px solid var(--border-md);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text)">
+              <span style="font-size:12px;color:var(--text-2)">days before —</span>
+              <select id="adv-rem-action" class="form-select" style="flex:1;min-width:140px">
+                <option value="Register">Register</option>
+                <option value="Buy tickets">Buy tickets</option>
+                <option value="Check details">Check details</option>
+              </select>
+              <button type="button" class="btn-primary" id="adv-rem-add" style="font-size:12px;padding:5px 12px">+ Add</button>
+            </div>
+            <div id="adv-rem-list" style="display:flex;flex-direction:column;gap:4px"></div>
+          </div>
+        </details>
       </details>
     </div>
     <div class="modal-actions">
@@ -836,6 +854,43 @@ function makeEvBlock(ev, di, cols, occDate){
 }
 function renderEvents(){
   document.querySelectorAll('.ev-block:not(.is-ghost)').forEach(el=>el.remove());
+  // Render advance reminder blocks
+  const advCols=document.querySelectorAll('#main-cal-row .day-col');
+  const advDates=weekDates();
+  state.events.forEach(ev=>{
+    if(!ev.advReminders||!ev.advReminders.length)return;
+    // Get all dates this event occurs
+    const occDates=[];
+    if(ev.recWeekdays&&ev.recWeekdays.length){
+      ev.recWeekdays.forEach(dow=>{
+        const dS=toISO(advDates[dow]);
+        if((!ev.recStartDate||dS>=ev.recStartDate)&&(!ev.recUntil||dS<=ev.recUntil))occDates.push(dS);
+      });
+    } else {
+      const occ=occurrenceDateFor(ev);
+      if(shouldShow(ev))occDates.push(occ);
+    }
+    ev.advReminders.forEach(r=>{
+      occDates.forEach(occDate=>{
+        const remDate=toISO(addDays(fromISO(occDate),-r.days));
+        const di=advDates.findIndex(d=>toISO(d)===remDate);
+        if(di<0)return;
+        const col=advCols[di];if(!col)return;
+        const block=document.createElement('div');
+        block.className='ev-block';
+        const top=Math.max(0,330-270); // 5:30 = 330min, offset 270
+        block.style.cssText=`top:${top}px;height:28px;background:#FFF9C4;border-left:3px solid #F59E0B;color:#92400E;font-size:10px;font-weight:600;cursor:pointer;z-index:5;display:flex;align-items:center;padding:0 6px;gap:4px`;
+        block.innerHTML=`<span>⏰ ${r.action}: ${ev.title}</span>`;
+        block.title=`${r.action} for "${ev.title}" (${occDate})`;
+        block.addEventListener('click',()=>{
+          // Open original event
+          if(isTrueWeekly(ev)&&!ev.recOverrideDate) openRecEditChoice(ev.id,di);
+          else openEvModal(ev.id);
+        });
+        col.appendChild(block);
+      });
+    });
+  });
   const cols=document.querySelectorAll('#main-cal-row .day-col');
   const dates=weekDates();
 
@@ -890,7 +945,7 @@ function weekMinsForCat(catId){
     if(ev.recWeekdays&&ev.recWeekdays.length&&!ev.recOverrideDate){
       // Weekday recurring — count each visible day
       ev.recWeekdays.forEach(dow=>{
-        const dS=toISO(dates[dow]);
+        const dS=toISO(advDates[dow]);
         if(ev.recStartDate&&dS<ev.recStartDate)return;
         if(ev.recUntil&&dS>ev.recUntil)return;
         if(ev.recExceptions&&ev.recExceptions.includes(dS))return;
@@ -1394,6 +1449,7 @@ function openEvModal(id,dayIndex,startM,endM,occDate,prefill){
     document.getElementById('ev-title').value=ev.title;
     document.getElementById('ev-url').value=ev.url||'';
     document.getElementById('ev-address').value=ev.address||'';
+    window._advReminders=[...(ev.advReminders||[])];renderAdvRemList();
     document.getElementById('ev-start').value=minToTime(ev.startMin);
     setDurationFromMinutes(ev.startMin,ev.endMin);
     evEditDay=displayDayIndex(ev);
@@ -1414,6 +1470,7 @@ function openEvModal(id,dayIndex,startM,endM,occDate,prefill){
     document.getElementById('ev-title').value=prefill?.title||'';
     document.getElementById('ev-url').value='';
     document.getElementById('ev-address').value='';
+    window._advReminders=[];renderAdvRemList();
     const sm=startM!=null?startM:540,em=endM!=null?endM:600;
     document.getElementById('ev-start').value=minToTime(sm);
     setDurationFromMinutes(sm,em);
@@ -1505,6 +1562,7 @@ document.getElementById('ev-save').addEventListener('click',()=>{
   const reminderMins=getSelectedReminders();
   const evUrl=document.getElementById('ev-url').value.trim();
   const evAddress=document.getElementById('ev-address').value.trim();
+  const advReminders=window._advReminders||[];
   let recWeekdays=repeatMode==='weekdays'?getSelectedWeekdays():[];
   if(repeatMode==='weekdays'&&recWeekdays.length===0){alert('Please select at least one weekday.');return;}
   if(endMin<=startMin){alert('End time must be after start time.');return;}
@@ -1513,7 +1571,7 @@ document.getElementById('ev-save').addEventListener('click',()=>{
   if(evEditId){
     const ev=state.events.find(e=>e.id===evEditId);
     if(ev){
-      ev.title=title;ev.startMin=startMin;ev.endMin=endMin;ev.categoryId=catId;ev.reminderMins=reminderMins;ev.url=evUrl;ev.address=evAddress;
+      ev.title=title;ev.startMin=startMin;ev.endMin=endMin;ev.categoryId=catId;ev.reminderMins=reminderMins;ev.url=evUrl;ev.address=evAddress;ev.advReminders=advReminders;
       if(!ev.recOverrideDate){
         if(repeatMode==='once'){const occ=toISO(addDays(fromISO(state.weekStart),evEditDay));ev.recStartDate=occ;ev.recUntil=occ;delete ev.recWeekdays;}
         else if(repeatMode==='weekly'){if(!ev.recStartDate)ev.recStartDate=toISO(addDays(fromISO(state.weekStart),evEditDay));ev.recUntil=untilVal||null;delete ev.recWeekdays;}
@@ -1522,7 +1580,7 @@ document.getElementById('ev-save').addEventListener('click',()=>{
     }
   }else{
     const occDate=toISO(addDays(fromISO(state.weekStart),evEditDay));
-    const newEv={id:uid(),title,dayIndex:evEditDay,startMin,endMin,categoryId:catId,reminderMins,url:evUrl,address:evAddress};
+    const newEv={id:uid(),title,dayIndex:evEditDay,startMin,endMin,categoryId:catId,reminderMins,url:evUrl,address:evAddress,advReminders};
     if(repeatMode==='once'){newEv.recStartDate=occDate;newEv.recUntil=occDate;}
     else if(repeatMode==='weekly'){newEv.recStartDate=occDate;newEv.recUntil=untilVal||null;}
     else if(repeatMode==='weekdays'){newEv.recStartDate=occDate;newEv.recWeekdays=recWeekdays;newEv.recUntil=untilVal||null;}
@@ -1585,6 +1643,28 @@ document.getElementById('ev-delete').addEventListener('click',()=>{
     save();closeEvModal();renderEvents();
   });
 })();
+// Advance reminders
+function renderAdvRemList(){
+  const list=document.getElementById('adv-rem-list');if(!list)return;
+  list.innerHTML='';
+  (window._advReminders||[]).forEach((r,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;background:var(--surface);border-radius:6px';
+    row.innerHTML=`<span style="flex:1">${r.days}d before — <b>${r.action}</b></span>`;
+    const del=document.createElement('button');del.type='button';del.textContent='×';
+    del.style.cssText='background:none;border:none;cursor:pointer;color:var(--text-3);font-size:16px';
+    del.addEventListener('click',()=>{window._advReminders.splice(i,1);renderAdvRemList();});
+    row.appendChild(del);list.appendChild(row);
+  });
+}
+document.getElementById('adv-rem-add').addEventListener('click',()=>{
+  const days=parseInt(document.getElementById('adv-rem-days').value)||7;
+  const action=document.getElementById('adv-rem-action').value;
+  window._advReminders=window._advReminders||[];
+  window._advReminders.push({days,action});
+  renderAdvRemList();
+});
+
 // All/None reminder buttons
 document.getElementById('rem-select-all').addEventListener('click',()=>{
   document.querySelectorAll('#reminder-grid input').forEach(cb=>{cb.checked=true;});
