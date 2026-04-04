@@ -95,7 +95,7 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
 #grid-scroll{flex:1;overflow-y:scroll;overflow-x:hidden;border-top:1px solid rgba(0,0,0,0.18)}
 #grid-scroll::-webkit-scrollbar{width:4px}
 #grid-scroll::-webkit-scrollbar-thumb{background:var(--border-md);border-radius:2px}
-#grid-inner{height:1170px;position:relative}
+#grid-inner{height:2340px;position:relative}
 #grid-inner .cal-row{height:100%}
 #time-gutter{box-shadow:inset -1px 0 0 rgba(0,0,0,0.18);position:relative;background:var(--grid-bg)}
 .time-lbl{position:absolute;right:7px;font-size:11px;color:var(--text-2);transform:translateY(-50%);pointer-events:none;font-weight:400}
@@ -131,7 +131,8 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
 /* Modals */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:200;align-items:flex-start;justify-content:center;padding:40px 12px 12px;overflow-y:auto}
 .modal-overlay.open{display:flex}
-.modal-box{background:var(--bg);border-radius:16px;padding:20px;width:min(400px,96vw);border:0.5px solid var(--border-md);margin:auto}
+.modal-box{background:var(--bg);border-radius:16px;padding:20px;width:min(400px,96vw);border:0.5px solid var(--border-md);margin:auto;max-height:90vh;overflow-y:auto}
+.modal-close-x{position:sticky;top:0;float:right;background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-2);line-height:1;padding:0 0 4px 8px;z-index:1}
 .modal-title{font-size:15px;font-weight:700;margin-bottom:16px;color:var(--accent)}
 .form-row{margin-bottom:12px}
 .form-lbl{font-size:11px;color:var(--text-2);margin-bottom:4px;display:block;font-weight:500}
@@ -152,9 +153,10 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
 .cat-opt{padding:5px 11px;border-radius:14px;border:2px solid transparent;cursor:pointer;font-size:12px;font-weight:600}
 .cat-opt.sel{border-color:currentColor}
 .swatch-row{display:flex;gap:6px;flex-wrap:wrap}
-.swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:3px solid transparent}
+.swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:3px solid transparent;position:relative}
 .swatch:hover{transform:scale(1.15)}
 .swatch.sel{border-color:var(--text)}
+.swatch.is-used::after{content:'✓';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;text-shadow:0 0 3px rgba(0,0,0,.7);pointer-events:none}
 /* Reminder details dropdown */
 #reminder-details summary::-webkit-details-marker{display:none}
 #reminder-details[open] #reminder-toggle-lbl{transform:rotate(180deg)}
@@ -206,6 +208,9 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
         <button class="scheme-opt" data-scheme="pantone">🎨 Pantone Vivid</button>
         <button class="scheme-opt" data-scheme="pastel">🌸 Pastel Neon</button>
         <button class="scheme-opt" data-scheme="rainbow">🌈 Rainbow 24</button>
+        <button class="scheme-opt" data-scheme="vivid">✨ Vivid 24</button>
+        <button class="scheme-opt" data-scheme="pastelVivid">🫧 Pastel Vivid</button>
+        <button class="scheme-opt" data-scheme="deep">🌑 Deep 24</button>
       </div>
     </div>
     <button class="tb-btn" id="btn-debug" style="background:#ffe0f0">Debug</button>
@@ -439,6 +444,7 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
 <!-- Sync settings modal (one-time setup, gear icon) -->
 <div class="modal-overlay" id="sync-modal">
   <div class="modal-box">
+    <button class="modal-close-x" id="sync-cancel-x" title="Close">✕</button>
     <div class="modal-title">☁️ GitHub Gist — sync setup</div>
     <p style="font-size:12px;color:var(--text-2);margin-bottom:14px">One-time setup. After saving, all changes sync automatically — no button needed.</p>
     <div class="form-row"><label class="form-lbl">Personal Access Token <span style="font-size:10px">(scope: gist)</span></label><input class="form-input" type="password" id="sync-token" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off"></div>
@@ -493,6 +499,36 @@ const SCHEMES={
     {color:'#004CFF',bg:'#E0E8FF'},{color:'#1900FF',bg:'#E0E0FF'},{color:'#6600FF',bg:'#EAE0FF'},
     {color:'#9900FF',bg:'#F0E0FF'},{color:'#CC00FF',bg:'#F8E0FF'},{color:'#FF00E5',bg:'#FFE0FC'},
     {color:'#FF0099',bg:'#FFE0F0'},{color:'#FF004C',bg:'#FFE0E8'},{color:'#FF0026',bg:'#FFE0E4'},
+  ],
+  vivid:[
+    {color:'#E0001A',bg:'#FFE0E3'},{color:'#E04500',bg:'#FFE6E0'},{color:'#E07500',bg:'#FFEEDE'},
+    {color:'#E0A500',bg:'#FFF5DE'},{color:'#CCCC00',bg:'#FEFEE0'},{color:'#85CC00',bg:'#F3FEE0'},
+    {color:'#3DCC00',bg:'#E8FEE0'},{color:'#00CC3D',bg:'#E0FEE8'},{color:'#00CC85',bg:'#E0FEF3'},
+    {color:'#00CCCC',bg:'#E0FEFE'},{color:'#0085CC',bg:'#E0F3FE'},{color:'#003DCC',bg:'#E0E8FE'},
+    {color:'#1A00E0',bg:'#E3E0FF'},{color:'#5C00E0',bg:'#EBE0FF'},{color:'#9E00E0',bg:'#F3E0FF'},
+    {color:'#CC00CC',bg:'#FEE0FE'},{color:'#CC0085',bg:'#FEE0F3'},{color:'#CC003D',bg:'#FEE0E8'},
+    {color:'#CC3000',bg:'#FEE8E0'},{color:'#CC6000',bg:'#FEEFE0'},{color:'#B8B800',bg:'#FDFEE0'},
+    {color:'#008C30',bg:'#E0FEE9'},{color:'#005FAB',bg:'#E0EDFE'},{color:'#7A00AB',bg:'#F0E0FE'},
+  ],
+  pastelVivid:[
+    {color:'#F24060',bg:'#FFE8ED'},{color:'#F27040',bg:'#FFF0E8'},{color:'#F2A040',bg:'#FFF6E8'},
+    {color:'#F2CC40',bg:'#FFFBE8'},{color:'#D9D940',bg:'#FFFDE8'},{color:'#99D940',bg:'#F5FDE8'},
+    {color:'#52D955',bg:'#EAFDE8'},{color:'#40D999',bg:'#E8FDF5'},{color:'#40D9D9',bg:'#E8FDFD'},
+    {color:'#4099D9',bg:'#E8F5FD'},{color:'#4052D9',bg:'#E8EAFD'},{color:'#5B40D9',bg:'#EDEAFD'},
+    {color:'#9940D9',bg:'#F5EAFD'},{color:'#CC40D9',bg:'#FBE8FD'},{color:'#D940B3',bg:'#FDE8F9'},
+    {color:'#D9406B',bg:'#FDE8EF'},{color:'#D95540',bg:'#FDEAE8'},{color:'#D98840',bg:'#FDF3E8'},
+    {color:'#C9C940',bg:'#FDFDE8'},{color:'#82C940',bg:'#F3FDE8'},{color:'#40C982',bg:'#E8FDF3'},
+    {color:'#40AACC',bg:'#E8F7FB'},{color:'#8855CC',bg:'#F2EEFB'},{color:'#CC5588',bg:'#FBE8F0'},
+  ],
+  deep:[
+    {color:'#99001A',bg:'#FFE0E3'},{color:'#993000',bg:'#FFE6E0'},{color:'#995500',bg:'#FFEFE0'},
+    {color:'#997700',bg:'#FFF4E0'},{color:'#888800',bg:'#FFFDE0'},{color:'#508800',bg:'#F2FDE0'},
+    {color:'#198800',bg:'#E7FDE0'},{color:'#008833',bg:'#E0FDE9'},{color:'#008866',bg:'#E0FDF4'},
+    {color:'#008888',bg:'#E0FDFD'},{color:'#005588',bg:'#E0EDFD'},{color:'#002288',bg:'#E0E4FD'},
+    {color:'#0D0099',bg:'#E2E0FF'},{color:'#440099',bg:'#ECE0FF'},{color:'#770099',bg:'#F4E0FF'},
+    {color:'#990077',bg:'#FDE0F8'},{color:'#99004D',bg:'#FDE0EE'},{color:'#990022',bg:'#FDE0E5'},
+    {color:'#883300',bg:'#FDE9E0'},{color:'#886600',bg:'#FDF2E0'},{color:'#558800',bg:'#F4FDE0'},
+    {color:'#006655',bg:'#E0FDF8'},{color:'#003377',bg:'#E0E8FB'},{color:'#660077',bg:'#F2E0FB'},
   ],
 };
 
@@ -650,7 +686,10 @@ function load(){
     const raw=localStorage.getItem('wplanner-v3')||localStorage.getItem('wplanner-v2')||localStorage.getItem('wplanner-v1');
     if(raw){const d=JSON.parse(raw);if(d.categories)state.categories=d.categories;if(d.events)state.events=d.events;if(d.updatedAt)state.updatedAt=d.updatedAt;}
   }catch(e){}
-  try{const ss=localStorage.getItem('wplanner-sync');if(ss){const d=JSON.parse(ss);syncCfg.token=d.token||'';syncCfg.gistId=d.gistId||'';}}catch(e){}
+  try{const ss=localStorage.getItem('wplanner-sync');if(ss){const d=JSON.parse(ss);syncCfg.token=d.token||'';syncCfg.gistId=d.gistId||'';
+    // Guard: if gistId looks like a token, clear it to prevent 404 on init
+    if(syncCfg.gistId&&(syncCfg.gistId.startsWith('ghp_')||syncCfg.gistId.startsWith('github_pat_')))syncCfg.gistId='';
+  }}catch(e){}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -782,7 +821,7 @@ function renderDayHeaders(){
 }
 function renderTimeGutter(){
   const g=document.getElementById('time-gutter');g.innerHTML='';
-  for(let h=5;h<24;h++){const l=document.createElement('div');l.className='time-lbl';l.style.top=((h-5)*60+30)+'px';l.textContent=String(h).padStart(2,'0')+':00';g.appendChild(l);}
+  for(let h=5;h<24;h++){const l=document.createElement('div');l.className='time-lbl';l.style.top=((h-5)*120+60)+'px';l.textContent=String(h).padStart(2,'0')+':00';g.appendChild(l);}
 }
 function renderDayCols(){
   const today=toISO(new Date()),dates=weekDates();
@@ -790,13 +829,13 @@ function renderDayCols(){
     col.innerHTML='';
     col.className='day-col'+(i>=5?' is-wknd':'')+(toISO(dates[i])===today?' is-today':'');
     for(let h=0;h<19;h++){
-      if(h>0){const hl=document.createElement('div');hl.className='hour-line';hl.style.top=(h*60)+'px';col.appendChild(hl);}
-      const hh=document.createElement('div');hh.className='hour-half';hh.style.top=(h*60+30)+'px';col.appendChild(hh);
+      if(h>0){const hl=document.createElement('div');hl.className='hour-line';hl.style.top=(h*120)+'px';col.appendChild(hl);}
+      const hh=document.createElement('div');hh.className='hour-half';hh.style.top=(h*120+60)+'px';col.appendChild(hh);
     }
     col.addEventListener('dblclick',e=>{
       if(e.target.closest('.ev-block'))return;
       const rect=col.getBoundingClientRect();
-      const startM=snap(Math.max(270,Math.floor(e.clientY-rect.top)+270));
+      const startM=snap(Math.max(270,Math.floor((e.clientY-rect.top)/2)+270));
       openEvModal(null,i,startM,Math.min(1440,startM+60));
     });
   });
@@ -816,8 +855,8 @@ function makeEvBlock(ev, di, cols, occDate){
   block.dataset.id=ev.id;
   block.dataset.di=String(di);
   block.dataset.occDate=blockOccDate;
-  const h=Math.max(ev.endMin-ev.startMin,18);
-  const _top=Math.max(0,ev.startMin-270);
+  const h=Math.max((ev.endMin-ev.startMin)*2,24);
+  const _top=Math.max(0,(ev.startMin-270)*2);
   block.style.cssText=`top:${_top}px;height:${h}px;background:${cat.bg};border-left-color:${cat.color};color:${cat.color};filter:none;`;
   block.style.color=darkenColor(cat.color,0.55);
   block.innerHTML=`<span class="ev-title">${ev.title||'Event'}${rec?'<span class="ev-rec-badge">↻</span>':''}</span><span class="ev-time-lbl">${minToTime(ev.startMin)} – ${minToTime(ev.endMin)}</span><div class="ev-resize"></div>`;
@@ -881,7 +920,7 @@ function renderEvents(){
         const col=_advCols[di];if(!col)return;
         const block=document.createElement('div');
         block.className='ev-block';
-        const TOP=Math.max(0,330-270); // 5:30=330min, offset270
+        const TOP=Math.max(0,(330-270)*2); // 5:30=330min, offset270, scale×2
         block.style.cssText=`top:${TOP}px;height:26px;background:#FFF9C4;border:2px solid #DC2626;`+
           `border-radius:6px;color:#7C2D12;font-size:10px;font-weight:700;cursor:pointer;`+
           `z-index:6;display:flex;align-items:center;padding:0 6px;gap:4px;`+
@@ -937,7 +976,7 @@ function updateNowLine(){
   const col=cols[idx];if(!col){nl.style.display='none';return;}
   // Use getBoundingClientRect relative to grid-inner
   nl.style.display='block';
-  nl.style.top=Math.max(0,min-270)+'px';
+  nl.style.top=Math.max(0,(min-270)*2)+'px';
   nl.style.left=col.offsetLeft+'px';
   nl.style.width=col.offsetWidth+'px';
 }
@@ -1032,7 +1071,7 @@ function startDrag(startCX,startCY,evId,mode,grabOffsetY,clickedDi){
   const cols=document.querySelectorAll('#main-cal-row .day-col');
   let ghost=document.createElement('div');
   ghost.className='ev-block is-ghost';
-  ghost.style.cssText=`top:${Math.max(0,ev.startMin-270)}px;height:${dur}px;border-left-color:${cat.color};color:${cat.color};`;
+  ghost.style.cssText=`top:${Math.max(0,(ev.startMin-270)*2)}px;height:${dur*2}px;border-left-color:${cat.color};color:${cat.color};`;
   cols[displayDayIndex(ev)]?.appendChild(ghost);
 
   let pendingDay=displayDayIndex(ev),pendingStart=ev.startMin;
@@ -1051,10 +1090,10 @@ function startDrag(startCX,startCY,evId,mode,grabOffsetY,clickedDi){
     // Y: position relative to the column top + scroll, minus where user grabbed
     const colRect=col.getBoundingClientRect();
     const rawY=cy-colRect.top-(grabOffsetY||0);
-    const sm=snap(Math.max(270,Math.min(1170-dur,rawY+270)));
+    const sm=snap(Math.max(270,Math.min(1380-dur,rawY/2+270)));
 
     if(ghost.parentElement!==col)col.appendChild(ghost);
-    ghost.style.top=Math.max(0,sm-270)+'px';
+    ghost.style.top=Math.max(0,(sm-270)*2)+'px';
     pendingDay=di;
     pendingStart=sm;
 
@@ -1175,10 +1214,10 @@ function startResize(startY,evId,resizeDi){
   const origEnd=ev.endMin,tooltip=document.getElementById('drag-tooltip');
   let newEnd=origEnd;
   function onMove(cy){
-    newEnd=snap(Math.max(ev.startMin+15,origEnd+(cy-startY)));
+    newEnd=snap(Math.max(ev.startMin+15,origEnd+(cy-startY)/2));
     ev.endMin=newEnd;
     const block=document.querySelector(`.ev-block[data-id="${evId}"]`);
-    if(block){block.style.height=Math.max(ev.endMin-ev.startMin,18)+'px';block.querySelector('.ev-time-lbl').textContent=minToTime(ev.startMin)+' – '+minToTime(ev.endMin);}
+    if(block){block.style.height=Math.max((ev.endMin-ev.startMin)*2,24)+'px';block.querySelector('.ev-time-lbl').textContent=minToTime(ev.startMin)+' – '+minToTime(ev.endMin);}
     const block2=document.querySelector(`.ev-block[data-id="${evId}"]`);
     if(block2){
       const br=block2.getBoundingClientRect();
@@ -1703,10 +1742,10 @@ function buildSwatches(containerId,selectedColor){
   const usedColors=new Set(state.categories.map(cat=>cat.color));
   PALETTE.forEach(p=>{
     const isUsed=usedColors.has(p.color)&&p.color!==selectedColor;
-    if(isUsed)return; // skip used colors
     const s=document.createElement('div');
-    s.className='swatch'+(p.color===selectedColor?' sel':'');
+    s.className='swatch'+(p.color===selectedColor?' sel':'')+(isUsed?' is-used':'');
     s.style.background=p.color;s.dataset.color=p.color;s.dataset.bg=p.bg;
+    s.title=isUsed?'Already used by another category':'';
     s.addEventListener('click',()=>{c.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel'));s.classList.add('sel');});
     c.appendChild(s);
   });
@@ -1751,6 +1790,10 @@ document.getElementById('btn-sync-settings').addEventListener('click',()=>{
 document.getElementById('sync-save').addEventListener('click',async()=>{
   syncCfg.token=document.getElementById('sync-token').value.trim();
   syncCfg.gistId=document.getElementById('sync-gist-id').value.trim();
+  if(syncCfg.gistId&&(syncCfg.gistId.startsWith('ghp_')||syncCfg.gistId.startsWith('github_pat_'))){
+    document.getElementById('sync-status-box').textContent='❌ Gist ID field contains a token — paste the Gist ID from the URL, not the token.';
+    return;
+  }
   saveSyncCfg();
   document.getElementById('sync-status-box').textContent='Testing connection…';
   const ok=await pullGist();
@@ -1774,6 +1817,8 @@ document.getElementById('clear-all-data').addEventListener('click',()=>{
   save();document.getElementById('sync-modal').classList.remove('open');renderAll();
 });
 document.getElementById('sync-cancel').addEventListener('click',()=>document.getElementById('sync-modal').classList.remove('open'));
+document.getElementById('sync-cancel-x').addEventListener('click',()=>document.getElementById('sync-modal').classList.remove('open'));
+document.getElementById('sync-modal').addEventListener('click',e=>{if(e.target===document.getElementById('sync-modal'))document.getElementById('sync-modal').classList.remove('open');});
 
 // ═══════════════════════════════════════════════════════
 // Navigation & toolbar
@@ -1788,14 +1833,10 @@ document.getElementById('scheme-dropdown').addEventListener('click',e=>{
   const opt=e.target.closest('.scheme-opt');if(!opt)return;
   const scheme=opt.dataset.scheme;
   if(SCHEMES[scheme]){
-    // Replace PALETTE with chosen scheme
+    // Replace PALETTE with chosen scheme — category colors are NOT changed
     PALETTE.length=0;
     SCHEMES[scheme].forEach(p=>PALETTE.push(p));
-    // Update existing categories to use new colors in order
-    state.categories.forEach((cat,i)=>{
-      if(i<PALETTE.length){cat.color=PALETTE[i].color;cat.bg=PALETTE[i].bg;}
-    });
-    save();renderAll();
+    renderAll();
   }
   document.getElementById('scheme-dropdown').classList.remove('open');
 });
