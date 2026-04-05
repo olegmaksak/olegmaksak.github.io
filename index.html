@@ -1193,6 +1193,7 @@ document.getElementById('rec-drag-following').addEventListener('click',()=>{
   const master=state.events.find(e=>e.id===evId);if(!master)return;
   // Use blockOccDate (the actual clicked column date) not occurrenceDateFor (uses dayIndex)
   const occDate=blockOccDate||toISO(weekDates()[pendingDay]);
+  const origUntil=master.recUntil||null;
   const cutDate=toISO(addDays(fromISO(occDate),-1));
   master.recUntil=cutDate;
   state.events=state.events.filter(e=>!(e.recMasterId===master.id&&e.recOverrideDate>=occDate));
@@ -1200,7 +1201,7 @@ document.getElementById('rec-drag-following').addEventListener('click',()=>{
   const newEv={id:uid(),title:master.title,categoryId:master.categoryId,
     dayIndex:pendingDay,startMin:sm,endMin:sm+dur,
     recStartDate:toISO(weekDates()[pendingDay]),
-    recUntil:null,
+    recUntil:origUntil,
     reminderMins:master.reminderMins||[]};
   if(master.recWeekdays&&master.recWeekdays.length) newEv.recWeekdays=[...master.recWeekdays];
   state.events.push(newEv);
@@ -1403,27 +1404,26 @@ document.getElementById('rec-edit-following').addEventListener('click',()=>{
   document.getElementById('rec-edit-modal').classList.remove('open');
   const master=state.events.find(e=>e.id===pendingRec.evId);if(!master){pendingRec=null;return;}
   const fromDate=pendingRec.occDate;
+  const fromDi=pendingRec.di; // save clicked column before clearing pendingRec
   pendingRec=null;
+  // Save original recUntil before truncating master
+  const origUntil=master.recUntil||null;
   // Truncate old series just before fromDate
   master.recUntil=toISO(addDays(fromISO(fromDate),-1));
   state.events=state.events.filter(e=>!(e.recMasterId===master.id&&e.recOverrideDate>=fromDate));
   // Create new series starting from fromDate — identical to master, no modal needed
   const newEv={
     id:uid(), title:master.title, categoryId:master.categoryId,
-    dayIndex:master.dayIndex, startMin:master.startMin, endMin:master.endMin,
-    recStartDate:fromDate, recUntil:master.recUntil||null,
+    dayIndex:fromDi, startMin:master.startMin, endMin:master.endMin,
+    recStartDate:fromDate, recUntil:origUntil,
     reminderMins:master.reminderMins||[]
   };
-  // Fix: recUntil was just set to cutDate above — new series should keep original recUntil
-  // (we saved original before truncation above via master.recUntil which was already set)
-  // Actually master.recUntil is now the cutDate. We need the original:
-  // → we don't have it anymore. Use null (no end date) for the new series.
-  newEv.recUntil=null;
   if(master.recWeekdays&&master.recWeekdays.length) newEv.recWeekdays=[...master.recWeekdays];
   state.events.push(newEv);
   save();renderAll();
-  // Now open the new event for editing so user can change what they need
+  // Open the new series for editing; fix evEditDay to reflect the clicked column
   openEvModal(newEv.id);
+  evEditDay=fromDi;
 });
 // Edit all occurrences — open edit form for master directly
 document.getElementById('rec-edit-all').addEventListener('click',()=>{
@@ -1487,7 +1487,7 @@ function openEvModal(id,dayIndex,startM,endM,occDate,prefill){
 
   function setDurationFromMinutes(sm,em){
     const dur=em-sm;
-    const opts=[15,20,25,30,40,50,60,75,90,120];
+    const opts=[10,15,20,25,30,35,40,45,50,55,60,75,90,120];
     if(opts.includes(dur)){durSel.value=String(dur);endRow.style.display='none';}
     else{durSel.value='custom';endRow.style.display='';document.getElementById('ev-end').value=minToTime(em);}
   }
@@ -1640,16 +1640,14 @@ document.getElementById('ev-delete').addEventListener('click',()=>{
   if(!evEditId)return;
   const ev=state.events.find(e=>e.id===evEditId);if(!ev)return;
   if(ev.recOverrideDate){
-    // Override: delete it and remove exception from master so original reappears
-    const master=state.events.find(e=>e.id===ev.recMasterId);
-    if(master&&master.recExceptions)
-      master.recExceptions=master.recExceptions.filter(d=>d!==ev.recOverrideDate);
+    // Override: delete it, keep exception so occurrence stays hidden (not reverted)
     state.events=state.events.filter(e=>e.id!==evEditId);
     save();closeEvModal();renderEvents();
   }else if(isTrueWeekly(ev)){
-    // Master recurring event — ask which occurrences to delete
+    // Save before closeEvModal() clears evEditId/evEditDay
+    const savedId=evEditId,savedDay=evEditDay;
     closeEvModal();
-    openRecDelChoice(evEditId,evEditDay??displayDayIndex(ev));
+    openRecDelChoice(savedId,savedDay??displayDayIndex(ev));
   }else{
     // Plain template or one-off event
     state.events=state.events.filter(e=>e.id!==evEditId);
