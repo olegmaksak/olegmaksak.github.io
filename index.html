@@ -126,6 +126,7 @@ html,body{height:100%;overflow:hidden;background:var(--grid-bg);color:var(--text
 .ev-block.is-ghost{opacity:.5;background:transparent!important;border:2px dashed!important;border-left:2px dashed!important;pointer-events:none;z-index:20}
 .ev-block.is-conflict{outline:2px dashed var(--danger);outline-offset:1px}
 .ev-block.is-firm{box-shadow:inset 0 0 0 2px var(--firm-color,currentColor)}
+.ev-block.is-selected{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--accent);z-index:5}
 #drag-tooltip{position:fixed;background:#222;color:#fff;font-size:12px;font-weight:600;padding:4px 10px;border-radius:16px;pointer-events:none;z-index:999;display:none;white-space:nowrap}
 .scheme-wrap{position:relative}
 .scheme-dropdown{display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--bg);border:0.5px solid var(--border-md);border-radius:10px;padding:4px;z-index:300;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.12)}
@@ -711,6 +712,42 @@ function pushHistory(){
   if(_undoHistory.length>UNDO_LIMIT)_undoHistory.shift();
 }
 function saveWithHistory(){pushHistory();_rawSave();}
+// ═══════════════════════════════════════════════════════
+// Multi-select + Copy/Paste (Shift+click, Cmd+C / Cmd+V)
+// ═══════════════════════════════════════════════════════
+let selectedItems=[]; // [{evId,di,occDate}]
+let clipboard=[];
+function toggleSelect(evId,di,occDate){
+  const idx=selectedItems.findIndex(s=>s.evId===evId&&s.occDate===occDate);
+  if(idx>=0)selectedItems.splice(idx,1); else selectedItems.push({evId,di,occDate});
+  updateSelectionVisual();
+  showCopyHint();
+}
+function clearSelection(){selectedItems=[];updateSelectionVisual();hideCopyHint();}
+function updateSelectionVisual(){
+  document.querySelectorAll('.ev-block').forEach(b=>{
+    const sel=selectedItems.some(s=>s.evId===b.dataset.id&&s.occDate===b.dataset.occDate);
+    b.classList.toggle('is-selected',sel);
+  });
+}
+function showCopyHint(){
+  let h=document.getElementById('copy-hint');
+  if(!h){h=document.createElement('div');h.id='copy-hint';
+    h.style.cssText='position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.92);color:#fff;padding:7px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;transition:opacity .2s';
+    document.body.appendChild(h);}
+  h.textContent=selectedItems.length+' selected — \u2318C to copy';
+  h.style.opacity='1';
+}
+function hideCopyHint(){const h=document.getElementById('copy-hint');if(h)h.style.opacity='0';}
+function showToast(msg,dur=1800){
+  let t=document.getElementById('undo-toast');
+  if(!t){t=document.createElement('div');t.id='undo-toast';
+    t.style.cssText='position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.92);color:#fff;padding:7px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s';
+    document.body.appendChild(t);}
+  t.textContent=msg;t.style.opacity='1';clearTimeout(t._tid);
+  t._tid=setTimeout(()=>t.style.opacity='0',dur);
+}
+
 document.addEventListener('keydown',e=>{
   if((e.metaKey||e.ctrlKey)&&e.key==='z'&&!e.shiftKey){
     if(!_undoHistory.length)return;
@@ -719,16 +756,35 @@ document.addEventListener('keydown',e=>{
     state.events=snap.events;
     state.categories=snap.categories;
     _rawSave();renderAll();
-    // Toast feedback
-    let t=document.getElementById('undo-toast');
-    if(!t){
-      t=document.createElement('div');t.id='undo-toast';
-      t.style.cssText='position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(30,30,30,.92);color:#fff;padding:7px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s';
-      document.body.appendChild(t);
-    }
-    t.textContent='\u21A9 Undo'+ (_undoHistory.length?' (\u2026'+_undoHistory.length+' left)':'');
-    t.style.opacity='1';clearTimeout(t._tid);
-    t._tid=setTimeout(()=>t.style.opacity='0',1800);
+    showToast('\u21A9 Undo'+(_undoHistory.length?' (\u2026'+_undoHistory.length+' left)':''));
+  } else if((e.metaKey||e.ctrlKey)&&e.key==='c'){
+    if(!selectedItems.length)return;
+    e.preventDefault();
+    clipboard=selectedItems.map(s=>{
+      const ev=state.events.find(x=>x.id===s.evId);if(!ev)return null;
+      return{title:ev.title,startMin:ev.startMin,endMin:ev.endMin,categoryId:ev.categoryId,
+        reminderMins:[...(ev.reminderMins||[])],url:ev.url||'',address:ev.address||'',
+        advReminders:[...(ev.advReminders||[])],firm:ev.firm,di:s.di};
+    }).filter(Boolean);
+    clearSelection();
+    showToast('\uD83D\uDCCB Copied '+clipboard.length+' event'+(clipboard.length>1?'s':'')+' — \u2318V to paste');
+  } else if((e.metaKey||e.ctrlKey)&&e.key==='v'){
+    if(!clipboard.length)return;
+    e.preventDefault();
+    const dates=weekDates();
+    clipboard.forEach(item=>{
+      const di=Math.max(0,Math.min(6,item.di));
+      const newDate=toISO(dates[di]);
+      state.events.push({id:uid(),title:item.title,categoryId:item.categoryId,
+        dayIndex:di,startMin:item.startMin,endMin:item.endMin,
+        recStartDate:newDate,recUntil:newDate,
+        reminderMins:[...item.reminderMins],url:item.url,address:item.address,
+        advReminders:[...item.advReminders],firm:item.firm||undefined});
+    });
+    saveWithHistory();renderAll();
+    showToast('\u2705 Pasted '+clipboard.length+' event'+(clipboard.length>1?'s':''));
+  } else if(e.key==='Escape'){
+    clearSelection();
   }
 });
 function load(){
@@ -882,6 +938,9 @@ function renderDayCols(){
       if(h>0){const hl=document.createElement('div');hl.className='hour-line';hl.style.top=(h*120)+'px';col.appendChild(hl);}
       const hh=document.createElement('div');hh.className='hour-half';hh.style.top=(h*120+60)+'px';col.appendChild(hh);
     }
+    col.addEventListener('mousedown',e=>{
+      if(!e.target.closest('.ev-block')&&!e.shiftKey)clearSelection();
+    });
     col.addEventListener('dblclick',e=>{
       if(e.target.closest('.ev-block'))return;
       const rect=col.getBoundingClientRect();
@@ -916,6 +975,7 @@ function makeEvBlock(ev, di, cols, occDate){
     block.addEventListener('mousedown',e=>{
       if(e.target.classList.contains('ev-resize'))return;
       e.preventDefault();
+      if(e.shiftKey){toggleSelect(ev.id,parseInt(block.dataset.di),block.dataset.occDate);return;}
       const bRect=block.getBoundingClientRect();
       const blkDi=parseInt(block.dataset.di);
       startDrag(e.clientX,e.clientY,ev.id,'mouse',e.clientY-bRect.top,blkDi);
